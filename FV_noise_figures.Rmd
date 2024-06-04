@@ -1,0 +1,670 @@
+---
+title: "Code to generate the figures from Abbatecola et al.'s Face-Voice noise and attention article"
+output:
+    html_document:
+    number_sections: true
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Figure 1
+
+## 1B
+
+```{r 1B, fig.width=6, fig.height=8}
+
+require(lattice)
+require(latticeExtra)
+
+d <- read.csv("./data/exp_att/nonpar_scales.csv", 
+              stringsAsFactors = TRUE)
+
+complev <- strsplit(as.character(d$level), "_")
+d$Comp <- factor(sapply(complev, "[", 1))
+d$StimLev <- as.integer(sapply(complev, "[", 2))
+d$subID <- factor(d$subID)
+d$oscale <- d$scale + 1
+
+dd <- subset(d, subID %in% c(6, 28, 34)) |> droplevels()
+
+d$task <- factor(d$task, levels = c("fac", "voi", "sti"))
+dd$task <-  factor(dd$task, levels = c("fac", "voi", "sti"))
+levels(dd$task) <- levels(d$task) <- c("Face", "Voice", "Stimulus")
+d$Comp <- factor(d$Comp, levels = c("fac", "voi"))
+dd$Comp <- factor(dd$Comp, levels = c("fac", "voi"))
+levels(dd$Comp) <- levels(d$Comp) <- c("Face", "Voice")
+
+
+xyplot(2 * scale ~ StimLev, dd, groups = Comp, subset = subID == "6",
+	subscripts = TRUE, ylab = "d'", xlab = "Gender Scale", 
+	par.settings = list(superpose.symbol = list(pch = 16, col = c("red", "blue")),
+						superpose.line = list(col = c("red", "blue"))),
+	panel = function(x, y, subscripts, groups, ...){
+		panel.superpose(x, y, subscripts, groups, type = "smooth", lwd = 2)
+		panel.superpose(x, y, subscripts, groups)
+		panel.text(0.5, -0.55, "\u2640")
+		panel.text(19, -0.55, "\u2642")
+		},
+	auto.key = list(title = "Contribution", cex = 0.8, x = 0.1, y = 0.9
+))
+
+```
+
+## 1C
+
+```{r 1C, fig.width=6, fig.height=8}
+MNS <- 2 * with(d, tapply(scale, list(StimLev, Comp, task), mean))
+SEM <- 2 * with(d, tapply(scale, list(StimLev, Comp, task), sd))/sqrt(12)
+
+all.df <- do.call(rbind, apply(MNS, 3, function(m) stack(as.data.frame(m))))
+names(all.df) <- c("Scale", "Component")
+all.df$SEM <- do.call(rbind, apply(SEM, 3, function(m) stack(as.data.frame(m))))[, 1]
+all.df$Task <- factor(strsplit(row.names(all.df), "\\.") |> sapply("[", 1))
+all.df$StimLev <- 1:19							
+all.df$Task <- factor(all.df$Task, levels = c("Face", "Voice", "Stimulus"))
+	
+xyplot(Scale ~ StimLev | Component, all.df, groups = Task,
+	subscripts = TRUE, ylab = "d'", xlab = "Gender Scale", 
+	ylim = c(-0.75, 8),
+	par.settings = list(superpose.symbol = list(pch = 16, col = c("red", "blue", "black")),
+						superpose.line = list(col = c("red", "blue", "black"))),
+	panel = function(x, y, subscripts, groups, ...){
+		panel.superpose(x, y, subscripts, groups, type = "smooth", lwd = 2)
+		panel.text(0.5, -0.4, "\u2640", cex = 0.85)
+		panel.text(19, -0.4, "\u2642", cex = 0.85)
+		},
+		auto.key = list(title = "Task", cex = 0.8, x = 0.1, y = 0.9), 
+	)
+```
+
+## 1D
+
+```{r 1D, fig.width = 6, fig.height = 6}
+#### get trials from empirical dataset
+
+extract <- function(cond,name="", path = getwd(), cor = (cond >= 3)){
+    coord <- paste("^",cond,"_",name,sep="")
+    fn <- dir(path)[grep(coord, dir(path))]
+    d.lst <- lapply(fn, function(f){
+        d <- read.table(paste(path, "/",f, sep = ""), TRUE) 
+        if (cor) d$Resp <- 1 - d$Resp
+        d
+    })
+    d.df <- do.call(rbind, d.lst)
+    return(d.df)
+}
+
+
+setwd("./data/exp_att/")
+data_att.df <- rbind(
+    extract(0,"sub1" ), extract(0,"sub2" ), extract(0,"sub3" ),
+    extract(0,"sub4" ), extract(0,"sub5" ), extract(0,"sub6" ),
+    extract(1,"sub7" ), extract(1,"sub8" ), extract(1,"sub9" ),
+    extract(1,"sub10"), extract(1,"sub11"), extract(1,"sub12"),
+    extract(2,"sub13"), extract(2,"sub14"), extract(2,"sub15"),
+    extract(2,"sub16"), extract(2,"sub17"), extract(2,"sub18"),
+    extract(3,"sub19"), extract(3,"sub20"), extract(3,"sub21"),
+    extract(3,"sub22"), extract(3,"sub23"), extract(3,"sub24"),
+    extract(4,"sub25"), extract(4,"sub26"), extract(4,"sub27"),
+    extract(4,"sub28"), extract(4,"sub29"), extract(4,"sub30"),
+    extract(5,"sub31"), extract(5,"sub32"), extract(5,"sub33"),
+    extract(5,"sub34"), extract(5,"sub35"), extract(5,"sub36") )
+setwd("../../")
+#           male          female    
+#        00  01  02  |  03  04  05  face
+#  masc  10  11  12  |  13  14  15  voice
+#        20  21  22  |  23  24  25  stim
+#        ------------+------------  
+#        30  31  32  |  33  34  35  face
+#  femi  40  41  42  |  43  44  45  voice
+#        50  51  52  |  53  54  55  stim
+#
+# subject (male = 0, female = 1):             ID_att %% 10 %/% 3
+# stimulus (masc = 0, femi = 1):              ID_att %/% 30
+# condition (face = 0, voice = 1, stim = 2):  ID_att %% 30 %/% 10
+#
+ID_att <- rep(0:5,6) + rep(0:5,each = 6)*10
+ID_att <- rep(ID_att,each = 1500)
+
+#### modelling
+
+require(MLCM)
+
+
+
+att_fac.m <- mlcm(data_att.df[ID_att %% 30 %/% 10 == 0,])
+att_voi.m <- mlcm(data_att.df[ID_att %% 30 %/% 10 == 1,])
+att_sti.m <- mlcm(data_att.df[ID_att %% 30 %/% 10 == 2,])
+
+lev <-rbind(att_fac.m$pscale[c(18,38)], 
+            att_sti.m$pscale[c(18,38)],
+            att_voi.m$pscale[c(18,38)])
+
+ci <- rbind(summary(att_fac.m)$se[c(17,35)] * qt(0.975, 11),
+            summary(att_sti.m)$se[c(17,35)] * qt(0.975, 11),
+            summary(att_voi.m)$se[c(17,35)] * qt(0.975, 11))
+
+wei <- t(apply(lev, 1, function(x) {x / lev[2,]}))
+
+#### plotting
+
+par(cex.lab = 2, mar = c(5, 5, 1, 1) + 0.1)
+
+plot(0, type = "n", xaxt = "n", xlim = c(1,3), ylim = c(0,2),
+     xlab = "Condition", ylab = "Relative weights")
+axis(1, 1:3, c("Face", "Stimulus", "Voice"), cex.axis = 1.5)
+abline(h = 1, col = "gray", lty = 3, lwd = 1.5)
+abline(h = 0, col = "gray", lty = 3, lwd = 1.5)
+
+legend("topleft", c("Face", "Voice"), 
+       col = c("red", "blue"), lty = 1, cex = 1.5,
+       pch = 21, pt.bg = "white", bty = "n", lwd = 1.5)
+
+segments(1:3, wei[,1] - ci[,1], 1:3, wei[,1] + ci[,1], col = 'red', lwd = 1.5)
+segments(1:3, wei[,2] - ci[,2], 1:3, wei[,2] + ci[,2], col = 'blue', lwd = 1.5)
+
+lines(wei[,1], lwd = 1.5, cex = 1.5, pch = 21, type = "b", col = "red", bg = "white")
+lines(wei[,2], lwd = 1.5, cex = 1.5, pch = 21, type = "b", col = "blue", bg = "white")
+```
+
+
+# Figure 2
+
+```{r 2}
+#### get trials from empirical dataset
+
+extract <- function(cond,name="", path = getwd(), cor = (cond >= 3)){
+    coord <- paste("^",cond,"_",name,sep="")
+    fn <- dir(path)[grep(coord, dir(path))]
+    d.lst <- lapply(fn, function(f){
+        d <- read.table(paste(path, "/",f, sep = ""), TRUE) 
+        if (cor) d$Resp <- 1 - d$Resp
+        d
+    })
+    d.df <- do.call(rbind, d.lst)
+    return(d.df)
+}
+
+setwd("./data/exp_noi/")
+data.df <- rbind(
+    extract("Fac","sub1" ), extract("Fac","sub2" ), extract("Fac","sub3" ), 
+    extract("Fac","sub4" ), extract("Fac","sub5" ), extract("Fac","sub6" ),
+    extract("Voi","sub7" ), extract("Voi","sub8" ), extract("Voi","sub9" ), 
+    extract("Voi","sub10"), extract("Voi","sub11"), extract("Voi","sub12"),
+    extract("Sti","sub13"), extract("Sti","sub14"), extract("Sti","sub15"),
+    extract("Sti","sub16"), extract("Sti","sub17"), extract("Sti","sub18") 
+)
+setwd("../../")
+#     male          female    
+#  00  01  02  |  03  04  05  face
+#  10  11  12  |  13  14  15  voice
+#  20  21  22  |  23  24  25  stim
+#
+# subject (male = 0, female = 1):             ID %% 10 %/% 3
+# condition (face = 0, voice = 1, stim = 2):  ID %% 30 %/% 10
+#
+ID <- rep(0:5,3) + rep(0:2,each = 6)*10
+ID <- rep(ID,each = 1500)
+
+data.df$ID <- ID
+
+
+#### functions to simulate responses + apply the same model as empirical data
+
+sim_noi <- function(sim.df, att_w) {
+    n_1 <- sim.df$Vn/100
+    n_2 <- sim.df$An/100
+    
+    p_1 <- 1-n_1
+    p_2 <- 1-n_2
+    
+    v_1 <- 1/p_1
+    v_2 <- 1/p_2
+    
+    n1 <- 1/rnorm(nrow(sim.df), 0, v_1)
+    n2 <- 1/rnorm(nrow(sim.df), 0, v_2)
+    
+    w_1 <- n1**2/(n1**2 + n2**2)
+    w_2 <- n2**2/(n1**2 + n2**2)
+    
+    sim.df$d1 <- (sim.df[, 2] - sim.df[, 3] + 1/n1) * w_1 *    att_w
+    sim.df$d2 <- (sim.df[, 4] - sim.df[, 5] + 1/n2) * w_2 * (1-att_w)
+    sim.df$Delta <- sim.df$d1 + sim.df$d2 + rnorm(nrow(sim.df), 0, 1)
+    sim.df$simResp <- as.integer(sim.df$Delta >= 0)
+    
+    return(cbind(simResp = sim.df$simResp, sim.df[,1:8]))
+}
+
+
+noise_glm_sim <- function(data.df, ID, by = NA, exp1=2, exp2=1,
+                          i1=c(.10, .35, .65, .95), i2=c(.05, .35, .65, .95)){
+    
+    data.df <- rbind(
+        sim_noi(data.df[ID %% 30 %/% 10 == 0,], att_w = .6),
+        sim_noi(data.df[ID %% 30 %/% 10 == 1,], att_w = .4),
+        sim_noi(data.df[ID %% 30 %/% 10 == 2,], att_w = .5)
+    )
+    
+    data.df <- subset(data.df, select = -c(Resp))
+    
+    colnames(data.df)[1] <- "Resp"
+    
+    Vlevs <- c(10,50,75,90)
+    Alevs <- c(10,50,75,90)
+    data.df$Vn <- (0:3)[match(data.df$Vn,Vlevs)]
+    data.df$An <- (0:3)[match(data.df$An,Alevs)]
+    data.df$VAn  <- as.factor(data.df$Vn*4 + data.df$An + 1)
+    
+    dim1 <- substr(colnames(data.df)[2], 1, nchar(colnames(data.df)[2])-1)
+    dim2 <- substr(colnames(data.df)[4], 1, nchar(colnames(data.df)[4])-1)
+    
+    # subsample
+    if (all(is.na(by))) by = rep(TRUE,nrow(data.df))
+    newdata.df <- data.df[by,]
+    
+    ntri <- nrow(newdata.df)
+    newdata.df$VAn <- as.factor(newdata.df$VAn)
+    nlev <- length(levels(newdata.df$VAn))
+    
+    glm.m <- matrix(nrow = ntri, ncol = 3)
+    colnames(glm.m) <- c("Resp",paste("d", dim1, sep=""),paste("d", dim2, sep=""))
+    glm.m[,1] <- newdata.df$Resp
+    glm.m[,2] <- i1[newdata.df[,2]]**exp1 - i2[newdata.df[,3]]**exp1
+    glm.m[,3] <- i1[newdata.df[,4]]**exp2 - i2[newdata.df[,5]]**exp2
+    glm.df <- as.data.frame(glm.m)
+    glm.df$VAn <-newdata.df$VAn
+    
+    n <- colnames(glm.df)
+    
+    # initial model
+    model <- as.formula(paste(n[1],'~',n[2], '+', n[3], '+ 0'))
+    ini.glm <- glm(model, data = glm.df[glm.df$VAn == 1,], family = binomial('probit'))
+    
+    
+    trials <- list()
+    for(x in 1:length(ini.glm$coefficients)){
+        trials[[x]] <- ini.glm$coefficients[x] * glm.df[,x+1]
+    }
+    trials.df <- do.call("cbind", trials)
+    
+    noi <- list()
+    for(b in 1:length(ini.glm$coefficients)){
+        noi[[b]] <- matrix(data =  0, nrow = ntri, ncol = nlev)
+        for (t in 1:ntri){
+            noi[[b]][t, match(newdata.df$VAn[t], levels(newdata.df$VAn))] <- trials.df[t,b]
+        }
+    }
+    noi.m <- cbind(newdata.df$Resp, do.call("cbind", noi))
+    colnames(noi.m) <- c('Resp',
+                         paste('N', 1:10, "_",
+                               rep(names(ini.glm$coefficients), each = 10), sep = ""))
+    
+    noi.df <- as.data.frame(noi.m)
+    n <- colnames(noi.m)
+    model <- as.formula(paste(n[1],'~',paste(n[2:length(n)],collapse = '+'),'+ 0'))
+    noi.glm <- glm(model, data = noi.df, family = binomial('probit'))
+    
+    noi.glm$scales_noi <- noi.glm$coefficients
+    noi.glm$scales_ini <- ini.glm$coefficients
+    noi.glm$noi.df     <- noi.df
+    
+    return(noi.glm)
+}
+
+
+#### get simulated results
+
+fac_filter <- ID %% 30 %/% 10 == 0
+voi_filter <- ID %% 30 %/% 10 == 1
+sti_filter <- ID %% 30 %/% 10 == 2
+
+set.seed(42)
+
+fac_noi <- noise_glm_sim(data.df, ID, fac_filter)
+voi_noi <- noise_glm_sim(data.df, ID, voi_filter)
+sti_noi <- noise_glm_sim(data.df, ID, sti_filter)
+
+test_noi <- fac_noi
+```
+
+## 2D
+
+```{r 2D, fig.width = 10, fig.height = 10}
+
+scale <- 0:3
+
+opar <- par(mfrow = c(1, 2), mar = c(mar=c(1.1, 3.1, 4.1, 2.1)), mgp = c(1,1,0))
+
+plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,7.5),
+     yaxt = 'n', xaxt = 'n',cex.lab = 1.5,
+     xlab = '', ylab = "simulated d'", main = 'noise in attended modality')
+
+legend("topleft",
+       c("attended no noise", "attended noise", "unattended no noise", "unattended noise"), 
+       lty = c(2,1,2,1), col = c("red", "red", "blue", "blue"), lwd = 2, bty = "n",
+       x.intersp = 0.5, text.width = 0.01,
+       seg.len = 1.5)
+
+abline(h = 0, lty = 3, col = 'black', lwd = 2)
+lines(scale, scale * test_noi$scales_ini[2] * 2, col = 'blue', lty = 2, lwd = 3)
+lines(scale, scale * test_noi$scales_ini[1] * 2, col = 'red' , lty = 2, lwd = 3)
+
+lines(scale, scale * test_noi$scales_ini[2] * test_noi$scales_noi[ 3] * 2,
+      col = 'blue', lty = 1, lwd = 3)
+lines(scale, scale * test_noi$scales_ini[1] * test_noi$scales_noi[13] * 2,
+      col = 'red' , lty = 1, lwd = 3)
+
+
+
+plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,7.5),
+     yaxt = 'n', xaxt = 'n',cex.lab = 1.5,
+     xlab = '', ylab = "simulated d'", main = 'noise in unattended modality')
+
+abline(h = 0, lty = 3, col = 'black', lwd = 2)
+lines(scale, scale * test_noi$scales_ini[2] * 2, col = 'blue', lty = 2, lwd = 3)
+lines(scale, scale * test_noi$scales_ini[1] * 2, col = 'red' , lty = 2, lwd = 3)
+
+lines(scale, scale * test_noi$scales_ini[2] * test_noi$scales_noi[ 7] * 2,
+      col = 'blue', lty = 1, lwd = 3)
+lines(scale, scale * test_noi$scales_ini[1] * test_noi$scales_noi[17] * 2,
+      col = 'red' , lty = 1, lwd = 3)
+```
+
+## 2EFG
+
+```{r 2EFG, fig.width = 5, fig.height = 10}
+opar <- par(mfrow = c(3,1), cex.main = 1.75, cex.lab = 2, mar = c(3, 5, 2, 1))
+
+plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
+     cex.lab = 1.5,
+     xlab = '', ylab = "relative weight", main = 'noise in attended modality')
+
+abline(h = 0, lty = 3,lwd = 2, col = 'black')
+abline(h = 1, lty = 3,lwd = 2, col = 'black')
+
+lines(1:4,  test_noi$scales_noi[c( 1, 2, 3, 4)], col = 'blue', type = 'b', lwd = 3)
+lines(1:4,  test_noi$scales_noi[c(11,12,13,14)], col = 'red',  type = 'b', lwd = 3)
+
+plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
+     cex.lab = 1.5,
+     xlab = '', ylab = "relative weight", main = 'noise in unattended modality')
+
+abline(h = 0, lty = 3, lwd = 2, col = 'black')
+abline(h = 1, lty = 3, lwd = 2, col = 'black')
+
+lines(1:4,  test_noi$scales_noi[c( 1, 5, 7, 9)], col = 'blue', type = 'b', lwd = 3)
+lines(1:4,  test_noi$scales_noi[c(11,15,17,19)], col = 'red',  type = 'b', lwd = 3)
+
+
+plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
+     cex.lab = 1.5,
+     xlab = '', ylab = "relative weight", main = 'noise in both modalities')
+
+abline(h = 0, lty = 3, lwd = 2, col = 'black')
+abline(h = 1, lty = 3, lwd = 2, col = 'black')
+
+lines(1:4,  test_noi$scales_noi[c( 1, 6, 8,10)], col = 'blue', type = 'b', lwd = 3)
+lines(1:4,  test_noi$scales_noi[c(11,16,18,20)], col = 'red',  type = 'b', lwd = 3)
+```
+
+# Figure 3
+
+## 3A
+
+```{R 3A, fig.width = 10, fig.height = 10}
+
+#### get trials from empirical dataset
+
+extract <- function(cond,name="", path = getwd(), cor = (cond >= 3)){
+    coord <- paste("^",cond,"_",name,sep="")
+    fn <- dir(path)[grep(coord, dir(path))]
+    d.lst <- lapply(fn, function(f){
+        d <- read.table(paste(path, "/",f, sep = ""), TRUE) 
+        if (cor) d$Resp <- 1 - d$Resp
+        d
+    })
+    d.df <- do.call(rbind, d.lst)
+    return(d.df)
+}
+
+setwd("./data/exp_noi/")
+data.df <- rbind(
+  extract("Fac","sub1" ), extract("Fac","sub2" ), extract("Fac","sub3" ), 
+  extract("Fac","sub4" ), extract("Fac","sub5" ), extract("Fac","sub6" ),
+  extract("Voi","sub7" ), extract("Voi","sub8" ), extract("Voi","sub9" ), 
+  extract("Voi","sub10"), extract("Voi","sub11"), extract("Voi","sub12"),
+  extract("Sti","sub13"), extract("Sti","sub14"), extract("Sti","sub15"),
+  extract("Sti","sub16"), extract("Sti","sub17"), extract("Sti","sub18") 
+)
+setwd("../../")
+#     male          female    
+#  00  01  02  |  03  04  05  face
+#  10  11  12  |  13  14  15  voice
+#  20  21  22  |  23  24  25  stim
+#
+# subject (male = 0, female = 1):             ID %% 10 %/% 3
+# condition (face = 0, voice = 1, stim = 2):  ID %% 30 %/% 10
+#
+ID <- rep(0:5,3) + rep(0:2,each = 6)*10
+ID <- rep(ID,each = 1500)
+
+data.df$ID <- ID
+
+
+#### modelling apparatus
+
+require(lme4)
+
+noise_glm <- function(data.df, ID, by = NA, exp1=2, exp2=1, i1=c(.10, .35, .65, .95),
+                      i2=c(.05, .35, .65, .95)){
+    
+    Vlevs <- c(10,50,75,90)
+    Alevs <- c(10,50,75,90)
+    data.df$Vn <- (0:3)[match(data.df$Vn,Vlevs)]
+    data.df$An <- (0:3)[match(data.df$An,Alevs)]
+    data.df$VAn  <- as.factor(data.df$Vn*4 + data.df$An + 1)
+    
+    dim1 <- substr(colnames(data.df)[2], 1, nchar(colnames(data.df)[2])-1)
+    dim2 <- substr(colnames(data.df)[4], 1, nchar(colnames(data.df)[4])-1)
+    
+    # subsample
+    if (all(is.na(by))) by = rep(TRUE,nrow(data.df))
+    newdata.df <- data.df[by,]
+    
+    ntri <- nrow(newdata.df)
+    newdata.df$VAn <- as.factor(newdata.df$VAn)
+    nlev <- length(levels(newdata.df$VAn))
+    
+    glmm.m <- matrix(nrow = ntri, ncol = 3)
+    colnames(glmm.m) <- c("Resp",paste("d", dim1, sep=""),paste("d", dim2, sep=""))
+    glmm.m[,1] <- newdata.df$Resp
+    glmm.m[,2] <- i1[newdata.df[,2]]**exp1 - i2[newdata.df[,3]]**exp1
+    glmm.m[,3] <- i1[newdata.df[,4]]**exp2 - i2[newdata.df[,5]]**exp2
+    glmm.df <- as.data.frame(glmm.m)
+    glmm.df$s <- as.factor(ID[by])
+    glmm.df$VAn <-newdata.df$VAn
+    
+    n <- colnames(glmm.df)
+    
+    # initial model
+    model <- as.formula(paste(n[1],'~',n[2], '+', n[3], '+ 0 + (',n[2],'+0|s)+(',n[3],'+0|s)'))
+    ini.glmm <- glmer(model, data = glmm.df[glmm.df$VAn == 1,], family = binomial('probit'))
+    
+    
+    trials <- list()
+    for(x in 1:length(fixef(ini.glmm))){
+      trials[[x]] <- (fixef(ini.glmm)[x]+ranef(ini.glmm)$s[glmm.df$s,x]) *  glmm.df[,x+1]
+    }
+    trials.df <- do.call("cbind", trials)
+    
+    noi <- list()
+    for(b in 1:length(fixef(ini.glmm))){
+        noi[[b]] <- matrix(data =  0, nrow = ntri, ncol = nlev)
+        for (t in 1:ntri){
+            noi[[b]][t, match(newdata.df$VAn[t], levels(newdata.df$VAn))] <- trials.df[t,b]
+        }
+    }
+    noi.m <- cbind(newdata.df$Resp, do.call("cbind", noi))
+    colnames(noi.m) <- c('Resp',
+                         paste('N', 1:10, "_", rep(names(fixef(ini.glmm)), each = 10),sep = ""))
+    
+    noi.df <- as.data.frame(noi.m)
+    n <- colnames(noi.m)
+    model <- as.formula(paste(n[1],'~',paste(n[2:length(n)],collapse = '+'),'+ 0'))
+    noi.glm <- glm(model, data = noi.df, family = binomial('probit'))
+    
+    noi.glm$scales_noi <- noi.glm$coefficients
+    noi.glm$scales_ini <- fixef(ini.glmm)
+    noi.glm$noi.df     <- noi.df
+    
+    return(noi.glm)
+}
+
+
+#### get models
+
+fac_filter <- ID %% 30 %/% 10 == 0
+voi_filter <- ID %% 30 %/% 10 == 1
+sti_filter <- ID %% 30 %/% 10 == 2
+
+
+fac_noi <- noise_glm(data.df, ID, fac_filter)
+voi_noi <- noise_glm(data.df, ID, voi_filter)
+sti_noi <- noise_glm(data.df, ID, sti_filter)
+
+#### plot results
+
+layout(matrix(1:9, nrow = 3, byrow = TRUE))
+opar <- par(mgp = c(2,1,0), mar = c(3,3.5,2,1), cex.main = 2, cex.lab = 2)
+ylim <- c(-1.25,4.3)
+xlab <- '% noise'
+noi_int <- c(10,50,75,90)
+
+# Face task
+ci <- summary(fac_noi)$coefficients[,2] * qt(0.975, 5)
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='weights in Face task', main="visual noise")
+
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1), lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int, fac_noi$scales_noi[c(1,5,7,9)   ] - ci[c(1,5,7,9)], noi_int,
+         fac_noi$scales_noi[c(1,5,7,9)   ] + ci[c(1,5,7,9)], col = 'red', lwd = 1.5)
+segments(noi_int, fac_noi$scales_noi[c(1,5,7,9)+10] - ci[c(1,5,7,9)+10], noi_int,
+         fac_noi$scales_noi[c(1,5,7,9)+10] + ci[c(1,5,7,9)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, fac_noi$scales_noi[c(1,5,7,9)   ], type = 'b', lwd = 1.5,
+      pch = 21, col = 'red', bg = 'white')
+lines(noi_int, fac_noi$scales_noi[c(1,5,7,9)+10], type = 'b', lwd = 1.5,
+      pch = 21, col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='', main="auditory noise")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,fac_noi$scales_noi[1:4] - ci[1:4], noi_int,
+         fac_noi$scales_noi[1:4] + ci[1:4], col = 'red', lwd = 1.5)
+segments(noi_int, fac_noi$scales_noi[(1:4)+10] - ci[(1:4)+10], noi_int,
+         fac_noi$scales_noi[(1:4)+10] + ci[(1:4)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, fac_noi$scales_noi[ 1:4    ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, fac_noi$scales_noi[(1:4)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='', main="bimodal noise")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,fac_noi$scales_noi[c(1,6,8,10)] - ci[c(1,6,8,10)], noi_int,
+         fac_noi$scales_noi[c(1,6,8,10)] + ci[c(1,6,8,10)], col = 'red', lwd = 1.5)
+segments(noi_int, fac_noi$scales_noi[c(1,6,8,10)+10] - ci[c(1,6,8,10)+10], noi_int,
+         fac_noi$scales_noi[c(1,6,8,10)+10] + ci[c(1,6,8,10)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, fac_noi$scales_noi[c(1,6,8,10)   ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, fac_noi$scales_noi[c(1,6,8,10)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+# Voice task
+ci <- summary(voi_noi)$coefficients[,2] * qt(0.975, 5)
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='weights in voice task', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1), lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int, voi_noi$scales_noi[c(1,5,7,9)   ] - ci[c(1,5,7,9)], noi_int,
+         voi_noi$scales_noi[c(1,5,7,9)   ] + ci[c(1,5,7,9)], col = 'red', lwd = 1.5)
+segments(noi_int, voi_noi$scales_noi[c(1,5,7,9)+10] - ci[c(1,5,7,9)+10], noi_int,
+         voi_noi$scales_noi[c(1,5,7,9)+10] + ci[c(1,5,7,9)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, voi_noi$scales_noi[c(1,5,7,9)   ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, voi_noi$scales_noi[c(1,5,7,9)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,voi_noi$scales_noi[1:4] - ci[1:4], noi_int,
+         voi_noi$scales_noi[1:4] + ci[1:4], col = 'red', lwd = 1.5)
+segments(noi_int, voi_noi$scales_noi[(1:4)+10] - ci[(1:4)+10], noi_int,
+         voi_noi$scales_noi[(1:4)+10] + ci[(1:4)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, voi_noi$scales_noi[ 1:4    ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, voi_noi$scales_noi[(1:4)+10], type = 'b', lwd = 1.5, pch = 21, 
+      col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,voi_noi$scales_noi[c(1,6,8,10)] - ci[c(1,6,8,10)], noi_int,
+         voi_noi$scales_noi[c(1,6,8,10)] + ci[c(1,6,8,10)], col = 'red', lwd = 1.5)
+segments(noi_int, voi_noi$scales_noi[c(1,6,8,10)+10] - ci[c(1,6,8,10)+10], noi_int,
+         voi_noi$scales_noi[c(1,6,8,10)+10] + ci[c(1,6,8,10)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, voi_noi$scales_noi[c(1,6,8,10)   ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, voi_noi$scales_noi[c(1,6,8,10)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+# Stimulus task
+ci <- summary(sti_noi)$coefficients[,2] * qt(0.975, 5)
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='weights in stimulus task', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1), lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int, sti_noi$scales_noi[c(1,5,7,9)   ] - ci[c(1,5,7,9)], noi_int,
+         sti_noi$scales_noi[c(1,5,7,9)   ] + ci[c(1,5,7,9)], col = 'red', lwd = 1.5)
+segments(noi_int, sti_noi$scales_noi[c(1,5,7,9)+10] - ci[c(1,5,7,9)+10], noi_int,
+         sti_noi$scales_noi[c(1,5,7,9)+10] + ci[c(1,5,7,9)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, sti_noi$scales_noi[c(1,5,7,9)   ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, sti_noi$scales_noi[c(1,5,7,9)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab, xaxt = 'n',
+     ylab='', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,sti_noi$scales_noi[1:4] - ci[1:4], noi_int,
+         sti_noi$scales_noi[1:4] + ci[1:4], col = 'red', lwd = 1.5)
+segments(noi_int, sti_noi$scales_noi[(1:4)+10] - ci[(1:4)+10], noi_int,
+         sti_noi$scales_noi[(1:4)+10] + ci[(1:4)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, sti_noi$scales_noi[ 1:4    ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, sti_noi$scales_noi[(1:4)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
+
+plot(0, type='n', xlim=c(0,100), ylim=ylim, cex.lab=1.5, xlab=xlab,
+     xaxt = 'n', ylab='', main="")
+axis(1, at=noi_int, labels = noi_int)
+abline(h=c(0,1),lty = 3, lwd = 1.5, col = 'black')
+segments(noi_int,sti_noi$scales_noi[c(1,6,8,10)] - ci[c(1,6,8,10)], noi_int,
+         sti_noi$scales_noi[c(1,6,8,10)] + ci[c(1,6,8,10)], col = 'red', lwd = 1.5)
+segments(noi_int, sti_noi$scales_noi[c(1,6,8,10)+10] - ci[c(1,6,8,10)+10], noi_int,
+         sti_noi$scales_noi[c(1,6,8,10)+10] + ci[c(1,6,8,10)+10], col = 'blue', lwd = 1.5)
+lines(noi_int, sti_noi$scales_noi[c(1,6,8,10)   ], type = 'b', lwd = 1.5, pch = 21,
+      col = 'red', bg = 'white')
+lines(noi_int, sti_noi$scales_noi[c(1,6,8,10)+10], type = 'b', lwd = 1.5, pch = 21,
+      col = 'blue', bg = 'white')
