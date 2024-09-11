@@ -173,9 +173,9 @@ lines(wei[,2], lwd = 1.5, cex = 1.5, pch = 21, type = "b", col = "blue", bg = "w
 ```
 
 
-# Figure 2
+# Figure 3
 
-```{r 2}
+```{r 3}
 #### get trials from empirical dataset
 
 extract <- function(cond,name="", path = getwd(), cor = (cond >= 3)){
@@ -311,9 +311,8 @@ noise_glm_sim <- function(data.df, ID, by = NA, exp1=2, exp2=1,
     
     noi.glm$scales_noi <- noi.glm$coefficients
     noi.glm$scales_ini <- ini.glm$coefficients
-    noi.glm$noi.df     <- noi.df
     
-    return(noi.glm)
+    return(c(ini.glm$coefficients, noi.glm$coefficients))
 }
 
 
@@ -323,61 +322,93 @@ fac_filter <- ID %% 30 %/% 10 == 0
 voi_filter <- ID %% 30 %/% 10 == 1
 sti_filter <- ID %% 30 %/% 10 == 2
 
+mean_ci <- function(x) {
+    m <- mean(x)
+    n <- length(x)
+    me_95 <- qt(0.05/2, df = (n-1), lower.tail = FALSE) * sd(x) / sqrt(n)
+    return(c(mean = m, ci_95_low = m - me_95, ci_95_high = m + me_95))
+}
+
 set.seed(42)
 
-fac_noi <- noise_glm_sim(data.df, ID, fac_filter)
-voi_noi <- noise_glm_sim(data.df, ID, voi_filter)
-sti_noi <- noise_glm_sim(data.df, ID, sti_filter)
-
-test_noi <- fac_noi
+test_noi <- apply(replicate(25, noise_glm_sim(data.df, ID, fac_filter)), 1, 'mean_ci')
 ```
 
-## 2D
+## 3A
 
-```{r 2D, fig.width = 10, fig.height = 10}
+```{r 3A, fig.width = 9, fig.height = 6}
 
 scale <- 0:3
 
 opar <- par(mfrow = c(1, 2), mar = c(mar=c(1.1, 3.1, 4.1, 2.1)), mgp = c(1,1,0))
 
-plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,7.5),
+plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,8.5),
      yaxt = 'n', xaxt = 'n',cex.lab = 1.5,
      xlab = '', ylab = "simulated d'", main = 'noise in attended modality')
 
-legend("topleft",
-       c("attended no noise", "attended noise", "unattended no noise", "unattended noise"), 
+legend("topleft", c("attended no noise", "attended noise", "unattended no noise", "unattended noise"), 
        lty = c(2,1,2,1), col = c("red", "red", "blue", "blue"), lwd = 2, bty = "n",
        x.intersp = 0.5, text.width = 0.01,
        seg.len = 1.5)
 
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,2] * 2,
+          rev(scale * test_noi[3,2] * 2)),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,2]  * test_noi[2, 5] * 2,
+          rev(scale * test_noi[3,2]  * test_noi[3, 5] * 2)),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,1] * 2,
+          rev(scale * test_noi[3,1] * 2)),
+        col = rgb(1,0,0,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,1]  * test_noi[2,15] * 2,
+          rev(scale * test_noi[3,1]  * test_noi[3,15] * 2)),
+        col = rgb(1,0,0,.1), border = NA)
+
 abline(h = 0, lty = 3, col = 'black', lwd = 2)
-lines(scale, scale * test_noi$scales_ini[2] * 2, col = 'blue', lty = 2, lwd = 3)
-lines(scale, scale * test_noi$scales_ini[1] * 2, col = 'red' , lty = 2, lwd = 3)
+lines(scale, scale * test_noi[1,2] * 2, col = 'blue', lty = 2, lwd = 3)
+lines(scale, scale * test_noi[1,1] * 2, col = 'red' , lty = 2, lwd = 3)
 
-lines(scale, scale * test_noi$scales_ini[2] * test_noi$scales_noi[ 3] * 2,
-      col = 'blue', lty = 1, lwd = 3)
-lines(scale, scale * test_noi$scales_ini[1] * test_noi$scales_noi[13] * 2,
-      col = 'red' , lty = 1, lwd = 3)
+lines(scale, scale * test_noi[1,2] * test_noi[1, 5] * 2, col = 'blue', lty = 1, lwd = 3)
+lines(scale, scale * test_noi[1,1] * test_noi[1,15] * 2, col = 'red' , lty = 1, lwd = 3)
 
 
-
-plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,7.5),
+plot(0, type = 'n', xlim = c(0, 3), ylim = c(0,8.5),
      yaxt = 'n', xaxt = 'n',cex.lab = 1.5,
      xlab = '', ylab = "simulated d'", main = 'noise in unattended modality')
 
-abline(h = 0, lty = 3, col = 'black', lwd = 2)
-lines(scale, scale * test_noi$scales_ini[2] * 2, col = 'blue', lty = 2, lwd = 3)
-lines(scale, scale * test_noi$scales_ini[1] * 2, col = 'red' , lty = 2, lwd = 3)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,2] * 2,
+          rev(scale * test_noi[3,2] * 2)),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,2]  * test_noi[2, 9] * 2,
+          rev(scale * test_noi[3,2]  * test_noi[3, 9] * 2)),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,1] * 2,
+          rev(scale * test_noi[3,1] * 2)),
+        col = rgb(1,0,0,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    scale * test_noi[2,1]  * test_noi[2,19] * 2,
+          rev(scale * test_noi[3,1]  * test_noi[3,19] * 2)),
+        col = rgb(1,0,0,.1), border = NA)
 
-lines(scale, scale * test_noi$scales_ini[2] * test_noi$scales_noi[ 7] * 2,
-      col = 'blue', lty = 1, lwd = 3)
-lines(scale, scale * test_noi$scales_ini[1] * test_noi$scales_noi[17] * 2,
-      col = 'red' , lty = 1, lwd = 3)
+abline(h = 0, lty = 3, col = 'black', lwd = 2)
+lines(scale, scale * test_noi[1,2] * 2, col = 'blue', lty = 2, lwd = 3)
+lines(scale, scale * test_noi[1,1] * 2, col = 'red' , lty = 2, lwd = 3)
+
+lines(scale, scale * test_noi[1,2] * test_noi[1, 9] * 2, col = 'blue', lty = 1, lwd = 3)
+lines(scale, scale * test_noi[1,1] * test_noi[1,19] * 2, col = 'red' , lty = 1, lwd = 3)
 ```
 
-## 2EFG
+## 3BCD
 
-```{r 2EFG, fig.width = 5, fig.height = 10}
+```{r 3BCD, fig.width = 5, fig.height = 10}
+scale <- 1:4
 opar <- par(mfrow = c(3,1), cex.main = 1.75, cex.lab = 2, mar = c(3, 5, 2, 1))
 
 plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
@@ -387,8 +418,17 @@ plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
 abline(h = 0, lty = 3,lwd = 2, col = 'black')
 abline(h = 1, lty = 3,lwd = 2, col = 'black')
 
-lines(1:4,  test_noi$scales_noi[c( 1, 2, 3, 4)], col = 'blue', type = 'b', lwd = 3)
-lines(1:4,  test_noi$scales_noi[c(11,12,13,14)], col = 'red',  type = 'b', lwd = 3)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c( 3, 4, 5, 6)],
+          rev(test_noi[3,c( 3, 4, 5, 6)])),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c(13,14,15,16)],
+          rev(test_noi[3,c(13,14,15,16)])),
+        col = rgb(1,0,0,.1), border = NA)
+
+lines(scale,  test_noi[1,c( 3, 4, 5, 6)], col = 'blue', type = 'b', lwd = 3)
+lines(scale,  test_noi[1,c(13,14,15,16)], col = 'red',  type = 'b', lwd = 3)
 
 plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
      cex.lab = 1.5,
@@ -397,9 +437,17 @@ plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
 abline(h = 0, lty = 3, lwd = 2, col = 'black')
 abline(h = 1, lty = 3, lwd = 2, col = 'black')
 
-lines(1:4,  test_noi$scales_noi[c( 1, 5, 7, 9)], col = 'blue', type = 'b', lwd = 3)
-lines(1:4,  test_noi$scales_noi[c(11,15,17,19)], col = 'red',  type = 'b', lwd = 3)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c( 3, 7, 9,11)],
+          rev(test_noi[3,c( 3, 7, 9,11)])),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c(13,17,19,21)],
+          rev(test_noi[3,c(13,17,19,21)])),
+        col = rgb(1,0,0,.1), border = NA)
 
+lines(scale,  test_noi[1,c( 3, 7, 9,11)], col = 'blue', type = 'b', lwd = 3)
+lines(scale,  test_noi[1,c(13,17,19,21)], col = 'red',  type = 'b', lwd = 3)
 
 plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
      cex.lab = 1.5,
@@ -408,15 +456,24 @@ plot(0, type = 'n', xlim = c(1, 4), ylim = c(0,2),
 abline(h = 0, lty = 3, lwd = 2, col = 'black')
 abline(h = 1, lty = 3, lwd = 2, col = 'black')
 
-lines(1:4,  test_noi$scales_noi[c( 1, 6, 8,10)], col = 'blue', type = 'b', lwd = 3)
-lines(1:4,  test_noi$scales_noi[c(11,16,18,20)], col = 'red',  type = 'b', lwd = 3)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c( 3, 8,10,12)],
+          rev(test_noi[3,c( 3, 8,10,12)])),
+        col = rgb(0,0,1,.1), border = NA)
+polygon(c(scale, rev(scale)),
+        c(    test_noi[2,c(13,18,20,22)],
+          rev(test_noi[3,c(13,18,20,22)])),
+        col = rgb(1,0,0,.1), border = NA)
+
+lines(scale,  test_noi[1,c( 3, 8,10,12)], col = 'blue', type = 'b', lwd = 3)
+lines(scale,  test_noi[1,c(13,18,20,22)], col = 'red',  type = 'b', lwd = 3)
 ```
 
-# Figure 3
+# Figure 4
 
-## 3A
+## 4A
 
-```{R 3A, fig.width = 10, fig.height = 10}
+```{R 4A, fig.width = 10, fig.height = 10}
 
 #### get trials from empirical dataset
 
